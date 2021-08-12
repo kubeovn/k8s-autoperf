@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubeovn-perfmonitor
+  namespace: kube-system
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: kubeovn-perfmonitor
+    spec:
+      containers:
+        - name: kubeovn-perfmonitor
+          image: kubeovn/perf:v0.1
+          command:
+            - python3
+            - /startMonit.py
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: SERVER
+              value: "SETSERVER"
+            - name: PORT
+              value: "11111"
+            - name: TIME
+              value: "SETTIME"
+            - name: DURATION
+              value: "60"
+      restartPolicy: Always
+      nodeSelector:
+        perf-role: server
+      hostNetwork: true
+  selector:
+    matchLabels:
+      app: kubeovn-perfmonitor

@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubeovn-perfclient
+  namespace: kube-system
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: kubeovn-perfclient
+    spec:
+      containers:
+        - name: kubeovn-perfclient
+          image: kubeovn/perf:v0.1
+          command:
+            - python3
+            - /startTest.py
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: SERVER
+              value: "SETSERVER"
+            - name: PORT
+              value: "11111"
+            - name: TIME
+              value: "SETTIME"
+            - name: DURATION
+              value: "60"
+      restartPolicy: Always
+      nodeSelector:
+        perf-role: client
+  selector:
+    matchLabels:
+      app: kubeovn-perfclient

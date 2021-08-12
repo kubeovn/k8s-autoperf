@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubeovn-perfserver
+  namespace: kube-system
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: kubeovn-perfserver
+    spec:
+      containers:
+      - image: kubeovn/perf:v0.1
+        imagePullPolicy: Never
+        command:
+          - bash
+          - /startSr.sh
+        name: kubeovn-perfserver
+        env:
+          - name: PORT
+            value: "11111"
+          - name: PROTOCOL
+            value: "tcp"
+      restartPolicy: Always
+      nodeSelector:
+        perf-role: server
+  selector:
+    matchLabels:
+      app: kubeovn-perfserver
