@@ -6,11 +6,7 @@ import yaml
 import argparse
 
 
-
-DSTDIR = './result/'
-
-
-def nodesCheck():
+def nodes_check():
     process = Popen(['kubectl', 'get', 'nodes', '-l', 'perf-role=client', '-o', 'name'],
                     stdout=PIPE, stderr=PIPE)
     stdout, stderr = process.communicate()
@@ -66,7 +62,7 @@ def deploy_client(starttime, podip):
     print(stdout.decode('utf-8'), stderr.decode('utf-8'))
 
 
-def retrieve_data(label):
+def retrieve_data(label, output):
     process = Popen(['kubectl', '-n', 'kube-system', 'get', 'pod', '-l',
                      label, '-o', "jsonpath='{..metadata.namespace}/{..metadata.name}'"],
                     stdout=PIPE, stderr=PIPE)
@@ -74,7 +70,7 @@ def retrieve_data(label):
     rslts = stdout.decode('utf-8').split("\n")
     srcpod = eval(rslts[0])
     srcdir = srcpod + ':/result'
-    process = Popen(['kubectl', 'cp', srcdir, DSTDIR], stdout=PIPE, stderr=PIPE)
+    process = Popen(['kubectl', 'cp', srcdir, output], stdout=PIPE, stderr=PIPE)
     stdout, stderr = process.communicate()
     print(stdout.decode('utf-8'), stderr.decode('utf-8'))
 
@@ -86,54 +82,66 @@ def delete_dep():
     stdout, stderr = process.communicate()
     print(stdout.decode('utf-8'), stderr.decode('utf-8'))
 
-# check if nodes are labeled
-nodesCheck()
 
-# deploy server
-process = Popen(['kubectl', 'create', '-f', './templates/kubeovn-perfserver.yaml'],
-                stdout=PIPE, stderr=PIPE)
-stdout, stderr = process.communicate()
-print(stdout.decode('utf-8'), stderr.decode('utf-8'))
+def parse_args():
+    parser = argparse.ArgumentParser(description="auto Perf for kubernetes")
+    parser.add_argument('--output', help='output folder', type=str, default='./result/', )
+    args = parser.parse_args()
+    return args
 
-# check if server is ready
-while True:
+if __name__ == '__main__':
+
+    args = parse_args()
+    output = args.output
+
+    # check if nodes are labeled
+    nodes_check()
+
+    # deploy server
+    process = Popen(['kubectl', 'create', '-f', './templates/kubeovn-perfserver.yaml'],
+                    stdout=PIPE, stderr=PIPE)
+    stdout, stderr = process.communicate()
+    print(stdout.decode('utf-8'), stderr.decode('utf-8'))
+
+    # check if server is ready
+    while True:
+        process = Popen(['kubectl', '-n', 'kube-system', 'get', 'pod', '-l', 'app=kubeovn-perfserver', '-o',
+                         "jsonpath='{.items[*].status.containerStatuses[*].ready}'"],
+                        stdout=PIPE, stderr=PIPE)
+        stdout, stderr = process.communicate()
+        rslts = stdout.decode('utf-8').split("\n")
+        if len(rslts) == 1 and eval(rslts[0]) == "true":
+            print("server is ready")
+            break
+
+    # get server pod ip
     process = Popen(['kubectl', '-n', 'kube-system', 'get', 'pod', '-l', 'app=kubeovn-perfserver', '-o',
-                     "jsonpath='{.items[*].status.containerStatuses[*].ready}'"],
+                     "jsonpath='{.items[*].status.podIP}'"],
                     stdout=PIPE, stderr=PIPE)
     stdout, stderr = process.communicate()
     rslts = stdout.decode('utf-8').split("\n")
-    if len(rslts) == 1 and eval(rslts[0]) == "true":
-        print("server is ready")
-        break
+    ipaddress.ip_address(eval(rslts[0]))
+    podip = eval(rslts[0])
 
-# get server pod ip
-process = Popen(['kubectl', '-n', 'kube-system', 'get', 'pod', '-l', 'app=kubeovn-perfserver', '-o',
-                 "jsonpath='{.items[*].status.podIP}'"],
-                stdout=PIPE, stderr=PIPE)
-stdout, stderr = process.communicate()
-rslts = stdout.decode('utf-8').split("\n")
-ipaddress.ip_address(eval(rslts[0]))
-podip = eval(rslts[0])
+    # set start time for all pod
+    starttime = datetime.datetime.now() + datetime.timedelta(days=0, minutes=2)
+    nowtime = time.strftime("%H:%M:%S", time.localtime())
 
-# set start time for all pod
-starttime = datetime.datetime.now() + datetime.timedelta(days=0, minutes=2)
-nowtime = time.strftime("%H:%M:%S", time.localtime())
+    # deploy client/monitor
+    deploy_client(starttime, podip)
+    deploy_monitor(starttime, podip)
 
-# deploy client/monitor
-deploy_client(starttime, podip)
-deploy_monitor(starttime, podip)
+    # waiting util test/monitor over
+    while True:
+        if starttime.time() <= datetime.datetime.now().time():
+            break
+        time.sleep(1)
+    time.sleep(65)
 
-# waiting util test/monitor over
-while True:
-    if starttime.time() <= datetime.datetime.now().time():
-        break
-    time.sleep(1)
-time.sleep(65)
+    # retrive datas
+    retrieve_data("app=kubeovn-perfclient", output)
+    retrieve_data("app=kubeovn-perfmonitor", output)
 
-# retrive datas
-retrieve_data("'app=kubeovn-perfclient'")
-retrieve_data("'app=kubeovn-perfmonitor'")
-
-# delete all deploys
-delete_dep()
+    # delete all deploys
+    delete_dep()
 
