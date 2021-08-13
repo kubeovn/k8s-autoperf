@@ -27,6 +27,9 @@ spec:
               value: "SETTIME"
             - name: DURATION
               value: "60"
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsUser: 0
       restartPolicy: Always
       nodeSelector:
         perf-role: server

@@ -83,14 +83,16 @@ def delete_dep():
     stdout, stderr = process.communicate()
     print(stdout.decode('utf-8'), stderr.decode('utf-8'))
 
-
+# check if nodes are labeled
 nodesCheck()
 
+# deploy server
 process = Popen(['kubectl', 'create', '-f', './templates/kubeovn-perfserver.yaml'],
                 stdout=PIPE, stderr=PIPE)
 stdout, stderr = process.communicate()
 print(stdout.decode('utf-8'), stderr.decode('utf-8'))
 
+# check if server is ready
 while True:
     process = Popen(['kubectl', '-n', 'kube-system', 'get', 'pod', '-l', 'app=kubeovn-perfserver', '-o',
                      "jsonpath='{.items[*].status.containerStatuses[*].ready}'"],
@@ -101,6 +103,7 @@ while True:
         print("server is ready")
         break
 
+# get server pod ip
 process = Popen(['kubectl', '-n', 'kube-system', 'get', 'pod', '-l', 'app=kubeovn-perfserver', '-o',
                  "jsonpath='{.items[*].status.podIP}'"],
                 stdout=PIPE, stderr=PIPE)
@@ -109,19 +112,25 @@ rslts = stdout.decode('utf-8').split("\n")
 ipaddress.ip_address(eval(rslts[0]))
 podip = eval(rslts[0])
 
+# set start time for all pod
 starttime = datetime.datetime.now() + datetime.timedelta(days=0, minutes=2)
 nowtime = time.strftime("%H:%M:%S", time.localtime())
 
+# deploy client/monitor
 deploy_client(starttime, podip)
 deploy_monitor(starttime, podip)
 
+# waiting util test/monitor over
 while True:
     if starttime.time() <= datetime.datetime.now().time():
         break
     time.sleep(1)
 time.sleep(65)
 
+# retrive datas
 retrieve_data("'app=kubeovn-perfclient'")
 retrieve_data("'app=kubeovn-perfmonitor'")
+
+# delete all deploys
 delete_dep()
 

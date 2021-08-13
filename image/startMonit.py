@@ -10,10 +10,10 @@ SETTIME = os.environ["TIME"]
 DURATION = os.getenv("DURATION", "null")
 if DURATION == "null":
     DURATION = 60
-PERF = "perf"
 STEP = os.getenv("STEP", "null")
 if STEP == "null":
     STEP = 5
+PERF = "perf"
 
 
 def record_top(duration):
