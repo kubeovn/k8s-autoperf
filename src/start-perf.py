@@ -3,6 +3,9 @@ import time
 from subprocess import Popen, PIPE
 import ipaddress
 import yaml
+import argparse
+
+
 
 DSTDIR = './result/'
 
@@ -34,7 +37,7 @@ def deploy_monitor(starttime, podip):
                 yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = podip
             if alist[i]['name'] == 'TIME':
                 yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = starttime.strftime("%H:%M:%S")
-        with open('/tmp/kubeovn-perfclient.yaml', 'w+') as tf:
+        with open('/tmp/kubeovn-perfmonitor.yaml', 'w+') as tf:
             yaml.dump(data=yml_doc, stream=tf, allow_unicode=True)
 
     process = Popen(['kubectl', 'create', '-f', '/tmp/kubeovn-perfmonitor.yaml'],
