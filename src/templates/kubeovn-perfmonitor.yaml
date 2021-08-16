@@ -27,6 +27,8 @@ spec:
               value: "SETTIME"
             - name: DURATION
               value: "60"
+            - name: STEP
+              value: "5"
           securityContext:
             allowPrivilegeEscalation: false
             runAsUser: 0

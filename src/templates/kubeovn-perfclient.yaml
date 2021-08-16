@@ -27,6 +27,10 @@ spec:
               value: "SETTIME"
             - name: DURATION
               value: "60"
+            - name: MSGLEN
+              value: "1400"
+            - name: PROTOCOL
+              value: "tcp"
       restartPolicy: Always
       nodeSelector:
         perf-role: client
