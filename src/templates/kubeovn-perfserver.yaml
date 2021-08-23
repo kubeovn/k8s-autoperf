@@ -12,7 +12,7 @@ spec:
     spec:
       containers:
       - image: kubeovn/perf:v0.1
-        imagePullPolicy: Never
+        imagePullPolicy: Always
         command:
           - bash
           - /startSr.sh

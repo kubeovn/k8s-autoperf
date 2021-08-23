@@ -4,6 +4,7 @@ from subprocess import Popen, PIPE
 import ipaddress
 import yaml
 import argparse
+from tools import tools
 
 
 def nodes_check():
@@ -30,12 +31,12 @@ def deploy_server(port, protocl):
         alist = yml_doc['spec']['template']['spec']['containers'][0]['env']
         for i in range(len(alist)):
             if alist[i]['name'] == 'PORT':
-                yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = port
+                yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = tools.gen_yaml_para(port)
             if alist[i]['name'] == 'PROTOCOL':
-                yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = protocl
-        with open('/tmp/kubeovn-perfserver', 'w+') as tf:
+                yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = tools.gen_yaml_para(protocl)
+        with open('/tmp/kubeovn-perfserver.yaml', 'w+') as tf:
             yaml.dump(data=yml_doc, stream=tf, allow_unicode=True)
-    process = Popen(['kubectl', 'create', '-f', '/tmp/kubeovn-perfserver'],
+    process = Popen(['kubectl', 'create', '-f', '/tmp/kubeovn-perfserver.yaml'],
                 stdout=PIPE, stderr=PIPE)
     stdout, stderr = process.communicate()
     print(stdout.decode('utf-8'), stderr.decode('utf-8'))
@@ -49,11 +50,11 @@ def deploy_monitor(starttime, podip, intervals):
         alist = yml_doc['spec']['template']['spec']['containers'][0]['env']
         for i in range(len(alist)):
             if alist[i]['name'] == 'SERVER':
-                yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = podip
+                yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = tools.gen_yaml_para(podip)
             if alist[i]['name'] == 'TIME':
                 yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = starttime.strftime("%H:%M:%S")
             if alist[i]['name'] == 'STEP':
-                yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = intervals
+                yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = tools.gen_yaml_para(intervals)
         with open('/tmp/kubeovn-perfmonitor.yaml', 'w+') as tf:
             yaml.dump(data=yml_doc, stream=tf, allow_unicode=True)
 
@@ -71,17 +72,17 @@ def deploy_client(starttime, podip, port, duration, msglen, protocol):
         alist = yml_doc['spec']['template']['spec']['containers'][0]['env']
         for i in range(len(alist)):
             if alist[i]['name'] == 'SERVER':
-                yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = podip
+                yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = tools.gen_yaml_para(podip)
             if alist[i]['name'] == 'TIME':
                 yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = starttime.strftime("%H:%M:%S")
             if alist[i]['name'] == 'PORT':
-                yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = port
+                yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = tools.gen_yaml_para(port)
             if alist[i]['name'] == 'DURATION':
-                yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = duration
+                yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = tools.gen_yaml_para(duration)
             if alist[i]['name'] == 'MSGLEN':
-                yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = msglen
+                yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = tools.gen_yaml_para(msglen)
             if alist[i]['name'] == 'PROTOCOL':
-                yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = protocol
+                yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = tools.gen_yaml_para(protocol)
         with open('/tmp/kubeovn-perfclient.yaml', 'w+') as tf:
             yaml.dump(data=yml_doc, stream=tf, allow_unicode=True)
 
@@ -98,10 +99,10 @@ def retrieve_data(label, output):
     stdout, stderr = process.communicate()
     rslts = stdout.decode('utf-8').split("\n")
     srcpod = eval(rslts[0])
-    srcdir = srcpod + ':/result'
+    srcdir = srcpod + ':result'
     process = Popen(['kubectl', 'cp', srcdir, output], stdout=PIPE, stderr=PIPE)
     stdout, stderr = process.communicate()
-    print(stdout.decode('utf-8'), stderr.decode('utf-8'))
+    print("retrieve finished", stdout.decode('utf-8'), stderr.decode('utf-8'))
 
 
 def delete_dep():
@@ -113,7 +114,6 @@ def delete_dep():
 
 
 def parse_args():
-    # TODO design parameters for three templates
     parser = argparse.ArgumentParser(description="auto Perf for kubernetes")
     parser.add_argument('--output', help='output folder', type=str, default='./result/')
     parser.add_argument('--duration', help='test duration', type=int, default=60)
@@ -162,8 +162,8 @@ if __name__ == '__main__':
     podip = eval(rslts[0])
 
     # set start time for all pod
-    starttime = datetime.datetime.now() + datetime.timedelta(days=0, minutes=2)
-    nowtime = time.strftime("%H:%M:%S", time.localtime())
+    starttime = datetime.datetime.utcnow() + datetime.timedelta(days=0, minutes=2)
+    # nowtime = time.strftime("%H:%M:%S", time.localtime())
 
     # deploy client/monitor
     deploy_client(starttime, podip, port, duration, msglen, protocol)
@@ -171,10 +171,10 @@ if __name__ == '__main__':
 
     # waiting util test/monitor over
     while True:
-        if starttime.time() <= datetime.datetime.now().time():
+        if starttime.time() <= datetime.datetime.utcnow().time():
             break
         time.sleep(1)
-    time.sleep(65)
+    time.sleep(130)
 
     # retrive datas
     retrieve_data("app=kubeovn-perfclient", output)

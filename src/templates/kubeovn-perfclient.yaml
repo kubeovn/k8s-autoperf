@@ -13,6 +13,7 @@ spec:
       containers:
         - name: kubeovn-perfclient
           image: kubeovn/perf:v0.1
+          imagePullPolicy: Always
           command:
             - python3
             - /startTest.py

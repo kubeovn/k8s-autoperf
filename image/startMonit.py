@@ -13,6 +13,8 @@ if DURATION == "null":
 STEP = os.getenv("STEP", "null")
 if STEP == "null":
     STEP = 5
+else:
+    STEP = int(STEP)
 PERF = "perf"
 
 
@@ -20,14 +22,14 @@ def record_top(duration):
     HOST = socket.gethostname()
     i = 1
     while STEP*i <= int(duration):
-        with open("/result/" + HOST + "-" + PERF + '-' + SETTIME, "a+") as out, \
-                open("/result/" + HOST + "-" + PERF + '-' + SETTIME, "a+") as err:
-            process = Popen(['mpstat', '-P', 'ALL'], stdout=out, stderr=err)
-            process.wait()
-        with open("/result/" + HOST + "-" + PERF + '-' + SETTIME, "a+") as out, \
-                open("/result/" + HOST + "-" + PERF + '-' + SETTIME, "a+") as err:
-            process = Popen(['top', '-n', '1'], stdout=out, stderr=err)
-            process.wait()
+        with open("/result/" + HOST + "-" + PERF + '-' + SETTIME + "cpu", "a+") as out, \
+                open("/result/" + HOST + "-" + PERF + '-' + SETTIME + "cpu", "a+") as err:
+            process1 = Popen(['mpstat', '-P', 'ALL'], stdout=out, stderr=err)
+            process1.wait()
+        with open("/result/" + HOST + "-" + PERF + '-' + SETTIME + "top", "a+") as out, \
+                open("/result/" + HOST + "-" + PERF + '-' + SETTIME + "top", "a+") as err:
+            process2 = Popen(['top', '-b', '-n', '1'], stdout=out, stderr=err)
+            process2.wait()
         i += 1
 
 
