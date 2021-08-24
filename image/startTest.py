@@ -24,7 +24,7 @@ print("start at %s with due %s" % (datetime.now().time(), floortime.time()))
 while True:
     if floortime.time() <= datetime.now().time() <= uppertime.time():
         with open("/result/"+HOST+"-"+IP+"-"+SOCKPERF+"PT", "wb") as out, \
-                open("/result/"+HOST+"-"+IP+"-"+SOCKPERF+"PT"+".err", "wb") as err:
+                open("/result/"+HOST+"-"+IP+"-"+SOCKPERF+"PT", "wb") as err:
             process = Popen([SOCKPERF, 'tp', '-i', IP, '-p', PORT, '--tcp', '-m', MSGLEN, '-t', DURATION],
                             stdout=out, stderr=err)
             process.wait()
@@ -35,7 +35,7 @@ print("sockperf passthrough finished")
 
 
 with open("/result/"+HOST+"-"+IP+"-"+SOCKPERF+"Delay", "wb") as out, \
-        open("/result/"+HOST+"-"+IP+"-"+SOCKPERF+"Delay"+".err", "wb") as err:
+        open("/result/"+HOST+"-"+IP+"-"+SOCKPERF+"Delay", "wb") as err:
     process = Popen([SOCKPERF, 'pp', '-i', IP, '-p', PORT, '--tcp', '-m', MSGLEN, '-t', DURATION, '--mps=max'],
                     stdout=out, stderr=err)
     process.wait()

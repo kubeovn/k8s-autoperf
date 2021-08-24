@@ -21,6 +21,13 @@ kubectl label nodes CLIENT-NODE perf-role=client
 kubectl label nodes SERVER-NODE perf-role=server
 ```
 
+​		为需要做监控的节点打标. 可以为多个节点打标, 例如为 client 和 server 所在的节点都打标. 在测试时会监控主机的cpu/火焰图/内存等资源(监控内容可增加).
+
+```shell
+kubectl label nodes SERVER-NODE perf-monitor=yes
+kubectl label nodes CLIENT-NODE perf-monitor=yes
+```
+
 ​		进入 `src` 目录并启动测试, 等待测试完成后, 在 `./result` 目录下可找到测试结果
 
 ```shell
@@ -40,7 +47,7 @@ deployment.apps "kubeovn-perfmonitor" deleted
 
 [root@perf-c3-small-x86-01 src]# ls ./result/
 kubeovn-perfclient-6d54b656c4-sgwrh-10.16.0.13-sockperfDelay      kubeovn-perfclient-6d54b656c4-sgwrh-10.16.0.13-sockperfPT      perf-c3-small-x86-02-perf-07:45:46top  perf-c3-small-x86-02-perf-07:45:46cpu
-kubeovn-perfclient-6d54b656c4-sgwrh-10.16.0.13-sockperfDelay.err  kubeovn-perfclient-6d54b656c4-sgwrh-10.16.0.13-sockperfPT.err  perf.data
+perf.data
 ```
 
 ​		时延测试结果由 `Delay` 结尾的文件保存, 带宽测试结果由 `PT` (Passthought)结尾的文件保存, 带宽测试期间的测试节点火焰图由 `perf.data` 保存. `cpu` 使用情况由 `perf-NODE-TIMEcpu` 的文件保存. 其他使用情况由 `perf-NODE-TIMEcop` 的文件保存.
@@ -86,11 +93,15 @@ auto Perf for kubernetes
 optional arguments:
   -h, --help            show this help message and exit
   --output OUTPUT       output folder
-  --duration DURATION   test duration
-  --msglen MSGLEN       sockperf message length
+  --duration DURATION   test duration, integer
+  --msglen MSGLEN       sockperf message length, integer
   --intervals INTERVALS
-                        intervals between sampling
-  --port PORT           port for test
-  --protocol PROTOCOL   protocol for test
+                        intervals between sampling, integer
+  --port PORT           port for test, between 1024 and 65535
+  --protocol PROTOCOL   protocol to test, "tcp" or "udp"
+  --clienthost CLIENTHOST
+                        true if client in host mode, default false
+  --serverhost SERVERHOST
+                        true if server in host mode, default false
 ```
 

@@ -1,10 +1,9 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: DaemonSet
 metadata:
   name: kubeovn-perfmonitor
   namespace: kube-system
 spec:
-  replicas: 1
   template:
     metadata:
       labels:
@@ -35,8 +34,9 @@ spec:
             runAsUser: 0
       restartPolicy: Always
       nodeSelector:
-        perf-role: server
+        perf-monitor: 'yes'
       hostNetwork: true
+      hostPID: true
   selector:
     matchLabels:
       app: kubeovn-perfmonitor

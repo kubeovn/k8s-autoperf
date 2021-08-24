@@ -16,10 +16,10 @@ if STEP == "null":
 else:
     STEP = int(STEP)
 PERF = "perf"
+HOST = socket.gethostname()
 
 
 def record_top(duration):
-    HOST = socket.gethostname()
     i = 1
     while STEP*i <= int(duration):
         with open("/result/" + HOST + "-" + PERF + '-' + SETTIME + "cpu", "a+") as out, \
@@ -42,7 +42,8 @@ while True:
     if floortime.time() <= datetime.datetime.now().time() <= uppertime.time():
         t = Thread(target=record_top, args=(DURATION,))
         t.start()
-        process = Popen([PERF, 'record', '-F', '297', '-a', '-g', '-o', '/result/perf.data', '--', 'sleep', '61'],
+        dst = "/result/" + HOST + '-' + SETTIME + '-' + "perf.data"
+        process = Popen([PERF, 'record', '-F', '297', '-a', '-g', '-o', dst, '--', 'sleep', '61'],
                         stdout=PIPE, stderr=PIPE)
         stdout, stderr = process.communicate()
         if process.returncode != 0:

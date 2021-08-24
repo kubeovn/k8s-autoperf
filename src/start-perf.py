@@ -4,7 +4,7 @@ from subprocess import Popen, PIPE
 import ipaddress
 import yaml
 import argparse
-from tools import tools
+from tools import tools, check
 
 
 def nodes_check():
@@ -42,7 +42,7 @@ def deploy_server(port, protocl):
     print(stdout.decode('utf-8'), stderr.decode('utf-8'))
 
 
-def deploy_monitor(starttime, podip, intervals):
+def deploy_monitor(starttime, podip, intervals, servernet):
     with open('./templates/kubeovn-perfmonitor.yaml', 'r') as f:
         yml_doc = yaml.safe_load(f)
         if yml_doc is None:
@@ -55,6 +55,8 @@ def deploy_monitor(starttime, podip, intervals):
                 yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = starttime.strftime("%H:%M:%S")
             if alist[i]['name'] == 'STEP':
                 yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = tools.gen_yaml_para(intervals)
+        if servernet == 'true':
+            yml_doc['spec']['template']['spec']['hostNetwork'] = 'true'
         with open('/tmp/kubeovn-perfmonitor.yaml', 'w+') as tf:
             yaml.dump(data=yml_doc, stream=tf, allow_unicode=True)
 
@@ -64,7 +66,7 @@ def deploy_monitor(starttime, podip, intervals):
     print(stdout.decode('utf-8'), stderr.decode('utf-8'))
 
 
-def deploy_client(starttime, podip, port, duration, msglen, protocol):
+def deploy_client(starttime, podip, port, duration, msglen, protocol, clientnet):
     with open('./templates/kubeovn-perfclient.yaml', 'r') as f:
         yml_doc = yaml.safe_load(f)
         if yml_doc is None:
@@ -83,6 +85,8 @@ def deploy_client(starttime, podip, port, duration, msglen, protocol):
                 yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = tools.gen_yaml_para(msglen)
             if alist[i]['name'] == 'PROTOCOL':
                 yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = tools.gen_yaml_para(protocol)
+        if clientnet == "true":
+            yml_doc['spec']['template']['spec']['hostNetwork'] = 'true'
         with open('/tmp/kubeovn-perfclient.yaml', 'w+') as tf:
             yaml.dump(data=yml_doc, stream=tf, allow_unicode=True)
 
@@ -105,9 +109,26 @@ def retrieve_data(label, output):
     print("retrieve finished", stdout.decode('utf-8'), stderr.decode('utf-8'))
 
 
+def retrieve_monitor(label, output):
+    process = Popen(['kubectl', '-n', 'kube-system', 'get', 'pod', '-l',
+                     label, '-o', "jsonpath='{..metadata.name}'"],
+                    stdout=PIPE, stderr=PIPE)
+    stdout, stderr = process.communicate()
+    rslts = eval(stdout.decode('utf-8')).split(" ")
+    for i in rslts:
+        srcdir = "kube-system/" + i + ':result'
+        process = Popen(['kubectl', 'cp', srcdir, output], stdout=PIPE, stderr=PIPE)
+        stdout, stderr = process.communicate()
+        print("retrieve finished for ", i, stdout.decode('utf-8'), stderr.decode('utf-8'))
+
+
 def delete_dep():
     process = Popen(['kubectl', '-n', 'kube-system', 'delete', 'deploy',
-                     'kubeovn-perfclient', 'kubeovn-perfserver', 'kubeovn-perfmonitor'],
+                     'kubeovn-perfclient', 'kubeovn-perfserver'],
+                    stdout=PIPE, stderr=PIPE)
+    stdout, stderr = process.communicate()
+    print(stdout.decode('utf-8'), stderr.decode('utf-8'))
+    process = Popen(['kubectl', '-n', 'kube-system', 'delete', 'ds', 'kubeovn-perfmonitor'],
                     stdout=PIPE, stderr=PIPE)
     stdout, stderr = process.communicate()
     print(stdout.decode('utf-8'), stderr.decode('utf-8'))
@@ -116,11 +137,13 @@ def delete_dep():
 def parse_args():
     parser = argparse.ArgumentParser(description="auto Perf for kubernetes")
     parser.add_argument('--output', help='output folder', type=str, default='./result/')
-    parser.add_argument('--duration', help='test duration', type=int, default=60)
-    parser.add_argument('--msglen', help='sockperf message length', type=int, default=1400)
-    parser.add_argument('--intervals', help='intervals between sampling', type=int, default=5)
-    parser.add_argument('--port', help='port for test', type=int, default=11111)
-    parser.add_argument('--protocol', help='protocol for test', type=str, default="tcp")
+    parser.add_argument('--duration', help='test duration, integer', type=int, default=60)
+    parser.add_argument('--msglen', help='sockperf message length, integer', type=int, default=1400)
+    parser.add_argument('--intervals', help='intervals between sampling, integer', type=int, default=5)
+    parser.add_argument('--port', help='port for test, between 1024 and 65535', type=int, default=11111)
+    parser.add_argument('--protocol', help='protocol to test, "tcp" or "udp"', type=str, default="tcp")
+    parser.add_argument('--clienthost', help='true if client in host mode, default false', type=bool, default="false")
+    parser.add_argument('--serverhost', help='true if server in host mode, default false', type=bool, default="false")
     args = parser.parse_args()
     return args
 
@@ -130,10 +153,17 @@ if __name__ == '__main__':
     args = parse_args()
     output = args.output
     duration = args.duration
+    check.check_int(duration)
     msglen = args.msglen
+    check.check_msglen(msglen)
     intervals = args.intervals
+    check.check_int(intervals)
     port = args.port
+    check.check_port(port)
     protocol = args.protocol
+    check.check_protocol(protocol)
+    clientnet = args.clienthost
+    servernet = args.serverhost
 
     # check if nodes are labeled
     nodes_check()
@@ -166,9 +196,10 @@ if __name__ == '__main__':
     # nowtime = time.strftime("%H:%M:%S", time.localtime())
 
     # deploy client/monitor
-    deploy_client(starttime, podip, port, duration, msglen, protocol)
-    deploy_monitor(starttime, podip, intervals)
+    deploy_client(starttime, podip, port, duration, msglen, protocol, clientnet)
+    deploy_monitor(starttime, podip, intervals, servernet)
 
+    print("The test will take a few minutes, please be patient.")
     # waiting util test/monitor over
     while True:
         if starttime.time() <= datetime.datetime.utcnow().time():
@@ -178,8 +209,10 @@ if __name__ == '__main__':
 
     # retrive datas
     retrieve_data("app=kubeovn-perfclient", output)
-    retrieve_data("app=kubeovn-perfmonitor", output)
+    retrieve_monitor("app=kubeovn-perfmonitor", output)
 
     # delete all deploys
     delete_dep()
 
+    # generate svg of perf
+    tools.gen_svg()
