@@ -23,7 +23,22 @@ def nodes_check():
         raise Exception("client node are not labeled")
 
 
-def deploy_server(port, protocl):
+def deploy_service(svcport, port):
+    with open('./templates/kubeovn-perfservice.yaml', 'r') as f:
+        yml_doc = yaml.safe_load(f)
+        if yml_doc is None:
+            raise Exception("template server not right")
+        yml_doc['spec']['ports'][0]['port'] = svcport
+        yml_doc['spec']['ports'][0]['targetPort'] = port
+        with open('/tmp/kubeovn-perfservice.yaml', 'w+') as tf:
+            yaml.dump(data=yml_doc, stream=tf, allow_unicode=True)
+    process = Popen(['kubectl', 'create', '-f', '/tmp/kubeovn-perfservice.yaml'],
+                stdout=PIPE, stderr=PIPE)
+    stdout, stderr = process.communicate()
+    print(stdout.decode('utf-8').strip("\n"), stderr.decode('utf-8'))
+
+
+def deploy_server(port, protocl, servernet, epnumber):
     with open('./templates/kubeovn-perfserver.yaml', 'r') as f:
         yml_doc = yaml.safe_load(f)
         if yml_doc is None:
@@ -34,15 +49,18 @@ def deploy_server(port, protocl):
                 yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = tools.gen_yaml_para(port)
             if alist[i]['name'] == 'PROTOCOL':
                 yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = tools.gen_yaml_para(protocl)
+        if servernet == 'true':
+            yml_doc['spec']['template']['spec']['hostNetwork'] = 'true'
+        yml_doc['spec']['replicas'] = epnumber
         with open('/tmp/kubeovn-perfserver.yaml', 'w+') as tf:
             yaml.dump(data=yml_doc, stream=tf, allow_unicode=True)
     process = Popen(['kubectl', 'create', '-f', '/tmp/kubeovn-perfserver.yaml'],
                 stdout=PIPE, stderr=PIPE)
     stdout, stderr = process.communicate()
-    print(stdout.decode('utf-8'), stderr.decode('utf-8'))
+    print(stdout.decode('utf-8').strip("\n"), stderr.decode('utf-8'))
 
 
-def deploy_monitor(starttime, podip, intervals, servernet):
+def deploy_monitor(starttime, podip, intervals):
     with open('./templates/kubeovn-perfmonitor.yaml', 'r') as f:
         yml_doc = yaml.safe_load(f)
         if yml_doc is None:
@@ -55,15 +73,13 @@ def deploy_monitor(starttime, podip, intervals, servernet):
                 yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = starttime.strftime("%H:%M:%S")
             if alist[i]['name'] == 'STEP':
                 yml_doc['spec']['template']['spec']['containers'][0]['env'][i]['value'] = tools.gen_yaml_para(intervals)
-        if servernet == 'true':
-            yml_doc['spec']['template']['spec']['hostNetwork'] = 'true'
         with open('/tmp/kubeovn-perfmonitor.yaml', 'w+') as tf:
             yaml.dump(data=yml_doc, stream=tf, allow_unicode=True)
 
     process = Popen(['kubectl', 'create', '-f', '/tmp/kubeovn-perfmonitor.yaml'],
                     stdout=PIPE, stderr=PIPE)
     stdout, stderr = process.communicate()
-    print(stdout.decode('utf-8'), stderr.decode('utf-8'))
+    print(stdout.decode('utf-8').strip("\n"), stderr.decode('utf-8'))
 
 
 def deploy_client(starttime, podip, port, duration, msglen, protocol, clientnet):
@@ -93,7 +109,7 @@ def deploy_client(starttime, podip, port, duration, msglen, protocol, clientnet)
     process = Popen(['kubectl', 'create', '-f', '/tmp/kubeovn-perfclient.yaml'],
                 stdout=PIPE, stderr=PIPE)
     stdout, stderr = process.communicate()
-    print(stdout.decode('utf-8'), stderr.decode('utf-8'))
+    print(stdout.decode('utf-8').split("\n"), stderr.decode('utf-8'))
 
 
 def retrieve_data(label, output):
@@ -127,11 +143,19 @@ def delete_dep():
                      'kubeovn-perfclient', 'kubeovn-perfserver'],
                     stdout=PIPE, stderr=PIPE)
     stdout, stderr = process.communicate()
-    print(stdout.decode('utf-8'), stderr.decode('utf-8'))
+    print(stdout.decode('utf-8').strip("\n"), stderr.decode('utf-8'))
     process = Popen(['kubectl', '-n', 'kube-system', 'delete', 'ds', 'kubeovn-perfmonitor'],
                     stdout=PIPE, stderr=PIPE)
     stdout, stderr = process.communicate()
-    print(stdout.decode('utf-8'), stderr.decode('utf-8'))
+    print(stdout.decode('utf-8').strip("\n"), stderr.decode('utf-8'))
+
+
+def delete_svc():
+    process = Popen(['kubectl', '-n', 'kube-system', 'delete', 'svc',
+                     'kubeovn-perfservice'],
+                    stdout=PIPE, stderr=PIPE)
+    stdout, stderr = process.communicate()
+    print(stdout.decode('utf-8').strip("\n"), stderr.decode('utf-8'))
 
 
 def parse_args():
@@ -142,8 +166,11 @@ def parse_args():
     parser.add_argument('--intervals', help='intervals between sampling, integer', type=int, default=5)
     parser.add_argument('--port', help='port for test, between 1024 and 65535', type=int, default=11111)
     parser.add_argument('--protocol', help='protocol to test, "tcp" or "udp"', type=str, default="tcp")
-    parser.add_argument('--clienthost', help='true if client in host mode, default false', type=bool, default="false")
-    parser.add_argument('--serverhost', help='true if server in host mode, default false', type=bool, default="false")
+    parser.add_argument('--clienthost', help='true if client in host mode, default false', type=bool, default=False)
+    parser.add_argument('--serverhost', help='true if server in host mode, default false', type=bool, default=False)
+    parser.add_argument('--svcmode', help='true if perf for service ip, default false', type=bool, default=False)
+    parser.add_argument('--epnumber', help='numbers of endpoints in svc mode, integer, default 1', type=int, default=1)
+    parser.add_argument('--svcport', help='svc port, between 1024 and 65535, integer, default 1111', type=int, default=11111)
     args = parser.parse_args()
     return args
 
@@ -164,12 +191,23 @@ if __name__ == '__main__':
     check.check_protocol(protocol)
     clientnet = args.clienthost
     servernet = args.serverhost
+    svcmode = args.svcmode
+    if svcmode:
+        epnumber = args.epnumber
+    else:
+        epnumber = 1
+    svcport = args.svcport
+    check.check_port(svcport)
 
     # check if nodes are labeled
     nodes_check()
 
     # deploy server
-    deploy_server(port, protocol)
+    if svcmode:
+        deploy_service(svcport, port)
+        deploy_server(port, protocol, servernet, epnumber)
+    else:
+        deploy_server(port, protocol, servernet, 1)
 
     # check if server is ready
     while True:
@@ -177,27 +215,24 @@ if __name__ == '__main__':
                          "jsonpath='{.items[*].status.containerStatuses[*].ready}'"],
                         stdout=PIPE, stderr=PIPE)
         stdout, stderr = process.communicate()
-        rslts = stdout.decode('utf-8').split("\n")
-        if len(rslts) == 1 and eval(rslts[0]) == "true":
+        rslts = eval(stdout.decode('utf-8')).split("\n")
+        if len(rslts) == epnumber and tools.check_value(rslts, 'true'):
             print("server is ready")
             break
 
     # get server pod ip
-    process = Popen(['kubectl', '-n', 'kube-system', 'get', 'pod', '-l', 'app=kubeovn-perfserver', '-o',
-                     "jsonpath='{.items[*].status.podIP}'"],
-                    stdout=PIPE, stderr=PIPE)
-    stdout, stderr = process.communicate()
-    rslts = stdout.decode('utf-8').split("\n")
-    ipaddress.ip_address(eval(rslts[0]))
-    podip = eval(rslts[0])
+    if svcmode:
+        testip = tools.get_svc_ip()
+    else:
+        testip = tools.get_pod_ip()
 
     # set start time for all pod
     starttime = datetime.datetime.utcnow() + datetime.timedelta(days=0, minutes=2)
     # nowtime = time.strftime("%H:%M:%S", time.localtime())
 
     # deploy client/monitor
-    deploy_client(starttime, podip, port, duration, msglen, protocol, clientnet)
-    deploy_monitor(starttime, podip, intervals, servernet)
+    deploy_client(starttime, testip, port, duration, msglen, protocol, clientnet)
+    deploy_monitor(starttime, testip, intervals)
 
     print("The test will take a few minutes, please be patient.")
     # waiting util test/monitor over
@@ -213,6 +248,8 @@ if __name__ == '__main__':
 
     # delete all deploys
     delete_dep()
+    if svcmode:
+        delete_svc()
 
     # generate svg of perf
     tools.gen_svg()

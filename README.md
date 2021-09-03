@@ -1,11 +1,19 @@
 ## k8s-autoperf
 
+##### 这是什么:
+
+​		k8s-autoperf 是一套用于在 Kubernetes 集群内完成自动化网络性能测试的小工具. 它能够完成自动化的性能测试 server/client pod 部署, 自动化的网络性能测试, 以及在测试期间的主机状态, 性能监控. 
+
+​		最终, 以上测试与监控的结果都将会以文件与火焰图的形式输出到本地的`./result/`文件夹下. 每次测试的结果都会以测试时间为文件名进行区分.
+
+
+
 ##### 如何使用:
 
 ​		安装依赖(以 centos 为例):
 
 ```shell
-yum install python3 pip3
+yum install python3 python3-pip3 perf -y
 pip3 install pyyaml
 ```
 
@@ -33,24 +41,54 @@ kubectl label nodes CLIENT-NODE perf-monitor=yes
 ```shell
 [root@perf-c3-small-x86-01 src]# python3 ./start-perf.py
 deployment.apps/kubeovn-perfserver created
-
 server is ready
 deployment.apps/kubeovn-perfclient created
-
-deployment.apps/kubeovn-perfmonitor created
-
+daemonset.apps/kubeovn-perfmonitor created
+The test will take a few minutes, please be patient.
 retrieve finished
-retrieve finished
+retrieve finished for  kubeovn-perfmonitor-rjzv4
+retrieve finished for  kubeovn-perfmonitor-zfkbr
 deployment.apps "kubeovn-perfclient" deleted
 deployment.apps "kubeovn-perfserver" deleted
-deployment.apps "kubeovn-perfmonitor" deleted
+daemonset.apps "kubeovn-perfmonitor" deleted
+master-10:35:19-perf.data
+generate:  ./result/master-10:35:19-perf.out
+generate ./result/master-10:35:19-perf.fold
+generate:  ./result/master-10:35:19-perf.svg
+
+slave-10:35:19-perf.data
+generate:  ./result/slave-10:35:19-perf.out
+generate ./result/slave-10:35:19-perf.fold
+generate:  ./result/slave-10:35:19-perf.svg
 
 [root@perf-c3-small-x86-01 src]# ls ./result/
-kubeovn-perfclient-6d54b656c4-sgwrh-10.16.0.13-sockperfDelay      kubeovn-perfclient-6d54b656c4-sgwrh-10.16.0.13-sockperfPT      perf-c3-small-x86-02-perf-07:45:46top  perf-c3-small-x86-02-perf-07:45:46cpu
-perf.data
+kubeovn-perfclient-57ffbdb88b-tqxr6-10.16.0.7-sockperfDelay  master-10:35:19-perf.data  master-perf-10:35:19cpu  slave-10:35:19-perf.data  slave-perf-10:35:19cpu
+kubeovn-perfclient-57ffbdb88b-tqxr6-10.16.0.7-sockperfPT     master-10:35:19-perf.svg   master-perf-10:35:19top  slave-10:35:19-perf.svg   slave-perf-10:35:19top
 ```
 
-​		时延测试结果由 `Delay` 结尾的文件保存, 带宽测试结果由 `PT` (Passthought)结尾的文件保存, 带宽测试期间的测试节点火焰图由 `perf.data` 保存. `cpu` 使用情况由 `perf-NODE-TIMEcpu` 的文件保存. 其他使用情况由 `perf-NODE-TIMEcop` 的文件保存.
+​		时延测试结果由 `Delay` 结尾的文件保存, 带宽测试结果由 `PT` (Passthought)结尾的文件保存, 带宽测试期间的测试节点火焰图数据由 `perf.data` 保存.  生成的火焰图是同名的`svg` 文件.  `cpu` 使用情况由 `perf-NODE-TIMEcpu` 的文件保存. 系统使用情况由 `perf-NODE-TIMEtop` 的文件保存.
+
+
+
+##### 使用样例:
+
+1, 测试pod之间直连的网络性能
+
+```shell
+python3 ./start-perf.py
+```
+
+2, 测试一个 pod 以 service ip 为目的 ip 访问集群内另一个服务时的网络性能. 可以指定 endpoint 的数量.
+
+```shell
+python3 ./start-perf.py --svcport true  --epnumber 2
+```
+
+3, 测试一个 pod 访问另外一个以 hostnet 模式部署的 pod 时的性能(或反过来).
+
+```shell
+python3 ./start-perf.py --serverhost true
+```
 
 
 
@@ -82,11 +120,17 @@ perf.data
 
 ​		2, 默认测试时间60s. 
 
+​		3, 测试完毕后及时删除或迁移结果, 否则会多次重建`svg`文件(会多耗时间但是不会改变结果).
+
 ​		其他配置见 --help
 
 ```shell
 ❯ python3 ./src/start-perf.py --help
-usage: start-perf.py [-h] [--output OUTPUT] [--duration DURATION] [--msglen MSGLEN] [--intervals INTERVALS] [--port PORT] [--protocol PROTOCOL]
+usage: start-perf.py [-h] [--output OUTPUT] [--duration DURATION]
+                     [--msglen MSGLEN] [--intervals INTERVALS] [--port PORT]
+                     [--protocol PROTOCOL] [--clienthost CLIENTHOST]
+                     [--serverhost SERVERHOST] [--svcmode SVCMODE]
+                     [--epnumber EPNUMBER] [--svcport SVCPORT]
 
 auto Perf for kubernetes
 
@@ -103,5 +147,9 @@ optional arguments:
                         true if client in host mode, default false
   --serverhost SERVERHOST
                         true if server in host mode, default false
+  --svcmode SVCMODE     true if perf for service ip, default false
+  --epnumber EPNUMBER   numbers of endpoints in svc mode, integer, default 1
+  --svcport SVCPORT     svc port, between 1024 and 65535, integer, default
+                        11111
 ```
 
