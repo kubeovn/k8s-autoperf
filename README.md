@@ -1,42 +1,44 @@
 ## k8s-autoperf
 
-##### 这是什么:
+[中文教程](https://github.com/lut777/k8s-autoperf/wiki)
 
-​		k8s-autoperf 是一套用于在 Kubernetes 集群内完成自动化网络性能测试的小工具. 它能够完成自动化的性能测试 server/client pod 部署, 自动化的网络性能测试, 以及在测试期间的主机状态, 性能监控. 
+##### What is it?
 
-​		最终, 以上测试与监控的结果都将会以文件与火焰图的形式输出到本地的`./result/`文件夹下. 每次测试的结果都会以测试时间为文件名进行区分.
+​		k8s-autoperf is a set of tools for automating network performance testing within a Kubernetes cluster. It can automate server/client pod deployments and network performance testing, and it can monitor host status during testing.
+
+​		Eventually, the results of the above tests and monitoring will be exported as files and flame charts to a local `./result/` folder. The results of each test will be distinguished by the time of the test as a file name.
 
 
 
-##### 如何使用:
+##### How to use:
 
-​		安装依赖(以 centos 为例):
+​		Installing dependencies (centos for example):
 
 ```shell
-yum install python3 python3-pip3 perf -y
+yum install python3 python3-pip3 perf perl* -y
 pip3 install pyyaml
 ```
 
-​		为测试 client 的所在节点打标, 该步骤确定 perf-client 的所在节点, `CLIENT-NODE` 是该节点名:
+​		Identify the node where the perf-client is located by marking the node, `CLIENT-NODE` is the name of the node:
 
 ```shell
 kubectl label nodes CLIENT-NODE perf-role=client
 ```
 
-​		为测试 server 的所在节点打标, 该步骤确定 perf-server 的所在节点, `SERVER-NODE` 是该节点名:
+​		Identify the node where the perf-server is located by marking the node, `SERVER-NODE` is the name of the node:
 
 ```shell
 kubectl label nodes SERVER-NODE perf-role=server
 ```
 
-​		为需要做监控的节点打标. 可以为多个节点打标, 例如为 client 和 server 所在的节点都打标. 在测试时会监控主机的cpu/火焰图/内存等资源(监控内容可增加).
+​		Mark the nodes that need to be monitored. Multiple nodes can be tagged, for example both the client and server nodes. The cpu/flame map/memory resources of the host will be monitored during testing.
 
 ```shell
 kubectl label nodes SERVER-NODE perf-monitor=yes
 kubectl label nodes CLIENT-NODE perf-monitor=yes
 ```
 
-​		进入 `src` 目录并启动测试, 等待测试完成后, 在 `./result` 目录下可找到测试结果
+​		Go to the `src` directory and start the test, wait for it to complete, and then find the results in the `. /result` directory.
 
 ```shell
 [root@perf-c3-small-x86-01 src]# python3 ./start-perf.py
@@ -66,25 +68,25 @@ kubeovn-perfclient-57ffbdb88b-tqxr6-10.16.0.7-sockperfDelay  master-10:35:19-per
 kubeovn-perfclient-57ffbdb88b-tqxr6-10.16.0.7-sockperfPT     master-10:35:19-perf.svg   master-perf-10:35:19top  slave-10:35:19-perf.svg   slave-perf-10:35:19top
 ```
 
-​		时延测试结果由 `Delay` 结尾的文件保存, 带宽测试结果由 `PT` (Passthought)结尾的文件保存, 带宽测试期间的测试节点火焰图数据由 `perf.data` 保存.  生成的火焰图是同名的`svg` 文件.  `cpu` 使用情况由 `perf-NODE-TIMEcpu` 的文件保存. 系统使用情况由 `perf-NODE-TIMEtop` 的文件保存.
+​		The delay test results are saved in a file ending in `Delay`, the bandwidth test results are saved in a file ending in `PT` (Passthought), and the flame graph data of test node during the bandwidth test is saved in `perf-TIME-NODE.data`. The generated flame graphs are `svg` files with the same name.  The `cpu` usage is stored in the `perf-NODE-TIMEcpu` file. System usage is saved by the `perf-NODE-TIMEtop` file.
 
 
 
-##### 使用样例:
+##### Sample use:
 
-1, 测试pod之间直连的网络性能
+1, Testing the network performance of direct connections between pods
 
 ```shell
 python3 ./start-perf.py
 ```
 
-2, 测试一个 pod 以 service ip 为目的 ip 访问集群内另一个服务时的网络性能. 可以指定 endpoint 的数量.
+2, Tests the network performance with a pod accessing another service in the cluster with the service ip as the destination ip. The number of endpoints can be specified.
 
 ```shell
 python3 ./start-perf.py --svcport true  --epnumber 2
 ```
 
-3, 测试一个 pod 访问另外一个以 hostnet 模式部署的 pod 时的性能(或反过来).
+3, Test the network performance with a pod accessing another pod deployed in hostnet mode (or vice versa).
 
 ```shell
 python3 ./start-perf.py --serverhost true
@@ -92,37 +94,43 @@ python3 ./start-perf.py --serverhost true
 
 
 
-##### 执行流程:
+##### Execution process:
 
-​		src/start-pef 设定参数和启动时间, 基于模板配置临时yaml文件(可在 /tmp/ 目录下找到并检查验证). 
+​		src/start-pef sets the parameters and start time, and configures a temporary yaml file based on the template (which can be found in the /tmp/ directory and checked for validation). 
 
-​		临时yaml文件会被下发到k8s. client pod 在启动时间启动测试, monitor pod监控并存储结果至文件.
+​		The temporary yaml file is then deployed to k8s. The client pod starts the test at the start time, the monitor pod monitors it and stores the results in a file.
 
-​		等待一定时间后, start-perf 回收数据, 删除测试资源. 
-
-
-
-##### 执行要求:
-
-​		1, 必须要有一个 node 的 label 中存在 perf-role=server, 该 node 为测试中的服务端所在 node. 必须有另一个不同的node被标记为perf-role=client, 该 node 作为测试中的客户端所在node. 该要求会在执行测试前检查.
-
-​		2, 目前 monitor 端是作为 root 执行. 若认为存在安全隐患, 也可以在需要部署 monitor 的 node上, 提前执行命令 
-
-​			`echo "-1" > kernel.perf_event_paranoid`. 该配置可以让非 root 用户也能够监控系统事件和参数.
-
-​		3, pod 内时间默认以 `utc0` 为准. 不要修改.
+​		After a certain amount of time, start-perf retrieves the data and removes the test resources. 
 
 
 
-##### 执行建议:
+##### Execution requirements:
 
-​		1, 默认的容器内程序启动时间为 src/start-perf 启动后的 2mins. 所以如果镜像下载过慢, 建议预先下载好镜像. 或是通过 image 文件夹下进行打包. `docker build -t kubeovn/perf:v0.1 .`	
+​		1, There must be a node with perf-role=server in its label, which is the server node under test. There must be a different node labeled perf-role=client, which is the client node under test. This requirement will be checked before the test is executed.
 
-​		2, 默认测试时间60s. 
+​		2, Currently the monitor side is executed as root. If you think there is a security risk, you can also run the following command on the node where the monitor is to be deployed in advance. 
 
-​		3, 测试完毕后及时删除或迁移结果, 否则会多次重建`svg`文件(会多耗时间但是不会改变结果).
+​			`echo "-1" > kernel.perf_event_paranoid`. 
 
-​		其他配置见 --help
+​			This configuration allows non-root users to monitor system events and parameters.
+
+​		3,  The default time zone in the pod is `utc0`. Do not change this.
+
+
+
+##### Execution advice:
+
+​		1, The default container start time is 2mins after src/start-perf starts. So if the image is too slow to download, it is recommended to download the image beforehand. Or build it in the image folder. 
+
+​			`docker build -t kubeovn/perf:v0.1 . `	
+
+​			We also encourage users to create test commands as they wish and build them into images. Simply save the results to the `/results` folder. K8s-autoperf will automatically retrieve the results.
+
+​		2, Default test time 60s. 
+
+​		3, Delete or migrate the results when you are done testing, otherwise you will rebuild the `svg` file several times (which will take more time but not change the results).
+
+​		For other configurations see --help
 
 ```shell
 ❯ python3 ./src/start-perf.py --help
