@@ -12,6 +12,12 @@
 
 ##### How to use:
 
+​		Get repository with submodule:
+
+```bash
+git clone --recurse-submodules  https://github.com/kubeovn/k8s-autoperf.git
+```
+
 ​		Installing dependencies (centos for example):
 
 ```shell
