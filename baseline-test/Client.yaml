@@ -1,0 +1,60 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: qperf-client
+spec:
+  ttlSecondsAfterFinished: 300
+  parallelism: 1
+  completions: 1
+  template:
+    metadata:
+      name: qperf-client
+      labels:
+        app: qperf-client
+        component: job
+    spec:
+      hostNetwork: IFHOST
+      containers:
+        - name: qperf-client
+          image: "kubeovn/perf:v0.1"
+          imagePullPolicy: IfNotPresent
+          command:
+            - /fastpath/entrypoint.sh
+          volumeMounts:
+            - name: configmap-volume
+              mountPath: /fastpath/entrypoint.sh
+              readOnly: true
+              subPath: entrypoint.sh
+            - mountPath: /tmp
+              name: tmp
+          resources:
+            requests:
+              cpu: CPUREQ000m
+              memory: 1Gi
+            limits:
+              cpu: CPULIM000m
+              memory: 5Gi
+      volumes:
+        - name: configmap-volume
+          configMap:
+            defaultMode: 0700
+            name: qperf-client
+        - name: tmp
+          hostPath:
+            path: /tmp
+      restartPolicy: Never
+      nodeSelector:
+        kubernetes.io/os: "linux"
+        perfClient: "true"
+  backoffLimit: 0
+
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: qperf-client
+data:
+  entrypoint.sh: |-
+    #!/bin/bash
+    qperf SERVERIP -ub -oo msg_size:1:32K:*4 -t 60 -vu tcp_lat tcp_bw udp_lat udp_bw > /tmp/SERVERIP-$(date +'%Y%m%d%H%M').result

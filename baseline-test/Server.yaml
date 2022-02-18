@@ -1,0 +1,54 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: qperf-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: qperf-server
+  template:
+    metadata:
+      labels:
+        app: qperf-server
+        component: network
+        type: infra
+    spec:
+      hostNetwork: IFHOST
+      containers:
+        - name: qperf-server
+          image: "kubeovn/perf:v0.1"
+          imagePullPolicy: IfNotPresent
+          command:
+            - qperf
+          resources:
+            requests:
+              cpu: CPUREQ000m
+              memory: 1Gi
+            limits:
+              cpu: CPULIM000m
+              memory: 5Gi
+      nodeSelector:
+        kubernetes.io/os: "linux"
+        perfServer: "true"
+
+---
+
+kind: Service
+apiVersion: v1
+metadata:
+  name: qperf-server
+spec:
+  ports:
+    - name: qperf-server-tcp
+      protocol: TCP
+      port: 19765
+      targetPort: 19765
+    - name: qperf-server-udp
+      protocol: UDP
+      port: 19765
+      targetPort: 19765
+  type: ClusterIP
+  selector:
+    app: qperf-server
+  sessionAffinity: None
